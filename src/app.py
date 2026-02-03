@@ -25,7 +25,7 @@ class OpenWhisperApp:
         self.record_start_time = None
         self._toggle_cooldown = 0
 
-    # ── Icône ──────────────────────────────────────────
+    # ── Icone ──────────────────────────────────────────
 
     def _create_icon_image(self, recording=False):
         """Cercle vert si enregistrement en cours, rouge sinon"""
@@ -44,15 +44,15 @@ class OpenWhisperApp:
         )
 
     def _menu_items(self):
-        """Menu dynamique — regénéré à chaque ouverture"""
-        status = "🟢 Enregistrement en cours..." if self.is_recording else "🔴 En attente"
-        startup_suffix = " ✓" if self._is_startup_enabled() else ""
+        """Menu dynamique - regenere a chaque ouverture"""
+        status = "[REC] Enregistrement en cours..." if self.is_recording else "[OFF] En attente"
+        startup_suffix = " *" if self._is_startup_enabled() else ""
         yield pystray.MenuItem(status, None, enabled=False)
         yield pystray.MenuItem(f"Hotkey : {HOTKEY}", None, enabled=False)
-        yield pystray.MenuItem(f"Démarrer au démarrage{startup_suffix}", self._toggle_startup)
+        yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
         yield pystray.MenuItem("Quitter", self.quit_app)
 
-    # ── Démarrage automatique (registre Windows) ───────
+    # ── Demarrage automatique (registre Windows) ───────
 
     def _get_exe_path(self):
         if getattr(sys, "frozen", False):
@@ -77,12 +77,12 @@ class OpenWhisperApp:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, access=winreg.KEY_SET_VALUE)
             winreg.DeleteValue(key, "OpenWhisper")
             winreg.CloseKey(key)
-            print("Démarrage automatique : désactivé")
+            print("Demarrage automatique : desactive")
         else:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, access=winreg.KEY_SET_VALUE)
             winreg.SetValueEx(key, "OpenWhisper", 0, winreg.REG_SZ, f'"{self._get_exe_path()}"')
             winreg.CloseKey(key)
-            print("Démarrage automatique : activé")
+            print("Demarrage automatique : active")
 
     # ── Presse-papier ─────────────────────────────────────
 
@@ -99,10 +99,10 @@ class OpenWhisperApp:
         user32.SetClipboardData(13, hMem)  # CF_UNICODETEXT = 13
         user32.CloseClipboard()
 
-    # ── Contrôle enregistrement (toggle) ────────────────
+    # ── Controle enregistrement (toggle) ────────────────
 
     def toggle_recording(self):
-        """Appui unique = démarrer OU arrêter"""
+        """Appui unique = demarrer OU arreter"""
         now = time.time()
         if now - self._toggle_cooldown < 0.3:   # ignore key-repeat
             return
@@ -119,7 +119,7 @@ class OpenWhisperApp:
         self.recorder.start()
         self.icon.icon = self._create_icon_image(True)
         sounds.play_start_recording()
-        print("🎤 Enregistrement démarré...")
+        print("[REC] Enregistrement demarre...")
 
     def _stop_and_transcribe(self):
         duration = time.time() - self.record_start_time
@@ -128,25 +128,25 @@ class OpenWhisperApp:
         self.icon.icon = self._create_icon_image(False)
 
         if duration < MIN_RECORDING_DURATION:
-            print(f"⚠️  Enregistrement trop court ({duration:.2f}s)")
+            print(f"[!] Enregistrement trop court ({duration:.2f}s)")
             return
 
-        print("⏹️  Enregistrement arrêté")
+        print("[STOP] Enregistrement arrete")
 
         if audio_data is not None and len(audio_data) > 0:
             sounds.play_start_transcription()
-            print("🔄 Transcription en cours...")
+            print("[...] Transcription en cours...")
             text = self.transcriber.transcribe(audio_data)
             if text:
-                print(f"✓ Transcrit: {text}")
+                print(f"[OK] Transcrit: {text}")
                 self._copy_to_clipboard(text)
                 self.injector.inject(text)
                 sounds.play_done()
-                print("✓ Texte copié et injecté")
+                print("[OK] Texte copie et injecte")
             else:
-                print("⚠️  Aucun texte détecté")
+                print("[!] Aucun texte detecte")
         else:
-            print("⚠️  Pas d'audio enregistré")
+            print("[!] Pas d'audio enregistre")
 
     # ── Cycle de vie ────────────────────────────────────
 
@@ -159,10 +159,10 @@ class OpenWhisperApp:
 
     def run(self):
         print("=" * 50)
-        print("🎙️  OpenWhisper - Démarré")
-        print(f"Hotkey : {HOTKEY}  (mode toggle)")
-        print("  1er appui  → démarrer l'enregistrement")
-        print("  2ème appui → arrêter + transcrire")
+        print("  OpenWhisper - Demarre")
+        print(f"  Hotkey : {HOTKEY}  (mode toggle)")
+        print("  1er appui  -> demarrer l'enregistrement")
+        print("  2eme appui -> arreter + transcrire")
         print("=" * 50)
 
         keyboard.add_hotkey(HOTKEY, self.toggle_recording)
@@ -174,5 +174,5 @@ class OpenWhisperApp:
             while self.is_running:
                 time.sleep(0.1)
         except KeyboardInterrupt:
-            print("\n👋 Arrêt de l'application...")
+            print("\nArret de l'application...")
             self.quit_app()
