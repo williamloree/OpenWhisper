@@ -10,7 +10,24 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            artifact: OpenWhisper.exe
+            pyinstaller_sep: ";"
+          - os: ubuntu-latest
+            name: Linux
+            artifact: OpenWhisper
+            pyinstaller_sep: ":"
+          - os: macos-latest
+            name: macOS
+            artifact: OpenWhisper
+            pyinstaller_sep: ":"
+
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.name }})
 
     steps:
       - name: Checkout code
@@ -21,19 +38,32 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-dev
+
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install portaudio
+
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Create ROCm directories (ctranslate2 fix)
+      - name: Create ROCm directories (Windows ctranslate2 fix)
+        if: matrix.os == 'windows-latest'
         run: |
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
           New-Item -ItemType Directory -Force -Path "$sitePackages\_rocm_sdk_core\bin"
           New-Item -ItemType Directory -Force -Path "$sitePackages\_rocm_sdk_libraries_custom\bin"
 
-      - name: Generate icon
+      - name: Generate icon (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
           python -c "
           from PIL import Image, ImageDraw
@@ -44,7 +74,8 @@ jobs:
           img.save('icon.ico')
           "
 
-      - name: Build executable
+      - name: Build executable (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
           pyinstaller main.py `
             --onefile `
@@ -67,16 +98,56 @@ jobs:
             --collect-all comtypes `
             --collect-all keyboard
 
+      - name: Build executable (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          pyinstaller main.py \
+            --onefile \
+            --noconsole \
+            --name OpenWhisper \
+            --paths . \
+            --add-data "assets/open.wav:." \
+            --add-data "assets/finish.mp3:." \
+            --collect-all ctranslate2 \
+            --collect-all sounddevice \
+            --collect-all _sounddevice_data \
+            --collect-all faster_whisper \
+            --collect-all pystray \
+            --collect-all keyboard
+
+      - name: Rename artifact
+        run: |
+          mv dist/${{ matrix.artifact }} dist/OpenWhisper-${{ matrix.name }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+        shell: bash
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenWhisper
-          path: dist/OpenWhisper.exe
+          name: OpenWhisper-${{ matrix.name }}
+          path: dist/OpenWhisper-${{ matrix.name }}*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir release
+          cp artifacts/OpenWhisper-Windows/* release/
+          cp artifacts/OpenWhisper-Linux/* release/
+          cp artifacts/OpenWhisper-macOS/* release/
+          ls -la release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/OpenWhisper.exe
+          files: release/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
