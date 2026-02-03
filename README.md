@@ -58,6 +58,32 @@ python scripts/build.py
 
 L'executable sera genere dans `dist/OpenWhisper.exe`.
 
+## Release (CI/CD)
+
+Le projet utilise GitHub Actions pour automatiser les releases.
+
+**Creer une nouvelle release :**
+
+```bash
+# Creer et pousser un tag de version
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+L'exe sera automatiquement build et disponible sur la page [Releases](../../releases).
+
+**Mettre a jour un tag existant :**
+
+```bash
+# Supprimer le tag local et distant
+git tag -d v1.0.0
+git push origin :refs/tags/v1.0.0
+
+# Recreer et pousser le tag
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ## Utilisation
 
 1. Lancez `OpenWhisper.exe` (mode administrateur recommande)

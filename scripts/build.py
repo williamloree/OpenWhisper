@@ -62,6 +62,7 @@ def main():
         "--icon", "icon.ico",
         "--paths", ".",
         "--add-data", "assets/open.wav;.",
+        "--add-data", "assets/finish.mp3;.",
         "--runtime-hook", "scripts/pyi_rth_rocm.py",
         "--hidden-import", "pystray._impl.comtypes",
         "--hidden-import", "comtypes",

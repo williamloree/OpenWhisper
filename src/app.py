@@ -5,6 +5,7 @@ import sys
 import os
 import winreg
 import threading
+import ctypes
 import pystray
 from PIL import Image, ImageDraw
 from src.audio_recorder import AudioRecorder
@@ -83,6 +84,21 @@ class OpenWhisperApp:
             winreg.CloseKey(key)
             print("Démarrage automatique : activé")
 
+    # ── Presse-papier ─────────────────────────────────────
+
+    def _copy_to_clipboard(self, text):
+        """Copie le texte dans le presse-papier Windows"""
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        user32.OpenClipboard(0)
+        user32.EmptyClipboard()
+        hMem = kernel32.GlobalAlloc(0x0042, len(text.encode('utf-16-le')) + 2)
+        pMem = kernel32.GlobalLock(hMem)
+        ctypes.cdll.msvcrt.wcscpy(ctypes.c_wchar_p(pMem), text)
+        kernel32.GlobalUnlock(hMem)
+        user32.SetClipboardData(13, hMem)  # CF_UNICODETEXT = 13
+        user32.CloseClipboard()
+
     # ── Contrôle enregistrement (toggle) ────────────────
 
     def toggle_recording(self):
@@ -123,9 +139,10 @@ class OpenWhisperApp:
             text = self.transcriber.transcribe(audio_data)
             if text:
                 print(f"✓ Transcrit: {text}")
+                self._copy_to_clipboard(text)
                 self.injector.inject(text)
                 sounds.play_done()
-                print("✓ Texte injecté")
+                print("✓ Texte copié et injecté")
             else:
                 print("⚠️  Aucun texte détecté")
         else:
