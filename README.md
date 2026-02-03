@@ -1,6 +1,8 @@
 # OpenWhisper
 
-Application Windows de transcription vocale locale avec Whisper AI.
+Application de transcription vocale locale avec Whisper AI.
+
+**Plateformes supportees** : Windows, Linux, macOS
 
 ## Fonctionnalites
 
@@ -14,12 +16,15 @@ Application Windows de transcription vocale locale avec Whisper AI.
 ## Telechargement
 
 1. Allez sur la page [Releases](../../releases)
-2. Telechargez `OpenWhisper.exe`
-3. Lancez l'application (mode administrateur recommande)
+2. Telechargez la version correspondant a votre OS :
+   - `OpenWhisper-Windows.exe` (Windows)
+   - `OpenWhisper-Linux` (Linux)
+   - `OpenWhisper-macOS` (macOS)
+3. Lancez l'application
 
 ## Utilisation
 
-1. **Lancez** `OpenWhisper.exe`
+1. **Lancez** l'application
 2. Une **icone rouge** apparait dans la barre des taches
 3. **`Ctrl + Espace`** pour demarrer l'enregistrement (son + icone verte)
 4. **`Ctrl + Espace`** pour arreter et transcrire (son de fin)
@@ -28,8 +33,14 @@ Application Windows de transcription vocale locale avec Whisper AI.
 **Menu** (clic droit sur l'icone) :
 
 - Voir le statut (enregistrement en cours ou en attente)
-- Activer/desactiver le demarrage automatique avec Windows
+- Activer/desactiver le demarrage automatique (Windows uniquement)
 - Quitter l'application
+
+**Notes par plateforme :**
+
+- **Windows** : Mode administrateur recommande
+- **Linux** : Necessite `xclip` ou `xsel` pour le presse-papier, `paplay`/`aplay` pour les sons
+- **macOS** : Fonctionne nativement
 
 ---
 
@@ -49,19 +60,33 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
+**Dependances systeme (Linux) :**
+
+```bash
+sudo apt-get install portaudio19-dev xclip
+```
+
+**Dependances systeme (macOS) :**
+
+```bash
+brew install portaudio
+```
+
 ### Lancer l'application
 
-**PowerShell :**
+**Windows (PowerShell) :**
 
 ```powershell
 .\venv\Scripts\activate
 python main.py
 ```
 
-**Git Bash / Terminal :**
+**Windows (Git Bash) / Linux / macOS :**
 
 ```bash
-./venv/Scripts/python.exe main.py
+source venv/bin/activate  # Linux/macOS
+# ou: ./venv/Scripts/python.exe main.py  # Windows Git Bash
+python main.py
 ```
 
 ### Build
@@ -70,11 +95,11 @@ python main.py
 python scripts/build.py
 ```
 
-L'executable sera genere dans `dist/OpenWhisper.exe`.
+L'executable sera genere dans `dist/`.
 
 ### Release (CI/CD)
 
-Le projet utilise GitHub Actions pour automatiser les releases.
+Le projet utilise GitHub Actions pour automatiser les builds multi-plateformes.
 
 **Creer une nouvelle release :**
 
@@ -83,7 +108,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-L'exe sera automatiquement build et disponible sur la page [Releases](../../releases).
+Les executables pour Windows, Linux et macOS seront automatiquement generes et disponibles sur la page [Releases](../../releases).
 
 **Mettre a jour un tag existant :**
 
@@ -112,8 +137,11 @@ OpenWhisper/
 │   ├── open.wav                 # Son de debut
 │   └── finish.mp3               # Son de fin
 ├── scripts/
-│   ├── build.py                 # Script de build
+│   ├── build.py                 # Script de build (Windows)
 │   └── pyi_rth_rocm.py          # Runtime hook PyInstaller
+├── .github/workflows/           # CI/CD GitHub Actions
+│   ├── build.yml                # Test de build multi-plateforme
+│   └── release.yml              # Build + release multi-plateforme
 ├── main.py                      # Point d'entree
 ├── requirements.txt
 ├── LICENSE
