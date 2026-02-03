@@ -1,7 +1,7 @@
 """Gestion de l'enregistrement audio"""
 import sounddevice as sd
 import numpy as np
-from config import SAMPLE_RATE, CHANNELS
+from src.config import SAMPLE_RATE, CHANNELS
 
 
 class AudioRecorder:

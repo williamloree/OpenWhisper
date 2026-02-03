@@ -3,7 +3,7 @@
 # Modèle Whisper à utiliser (tiny, base, small, medium, large-v3)
 # tiny = ultra rapide, précision moyenne
 # base = bon compromis vitesse/précision
-WHISPER_MODEL = "large-v3"
+WHISPER_MODEL = "medium"
 
 # Langue de transcription (fr, en, etc.)
 LANGUAGE = "fr"

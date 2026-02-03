@@ -1,84 +1,80 @@
-# 🎙️ Voice to Text - Transcription vocale instantanée
+# OpenWhisper
 
-Application Windows légère pour transcrire votre voix en texte via un simple raccourci clavier.
+Application Windows de transcription vocale locale avec Whisper AI.
 
-## ⚡ Fonctionnalités
+## Fonctionnalites
 
-- **Hotkey global** : `Ctrl + Espace` (maintenez pour enregistrer, relâchez pour transcrire)
-- **Transcription locale** : Utilise Whisper AI (aucune donnée envoyée sur internet)
-- **Injection automatique** : Le texte s'insère directement où se trouve votre curseur
-- **Ultra léger** : Pas d'interface, juste une icône dans la barre des tâches
-- **Support français** : Optimisé pour le français (modifiable pour d'autres langues)
+- **Hotkey global** : `Ctrl + Espace` (toggle enregistrement/transcription)
+- **Transcription locale** : Utilise Whisper AI (aucune donnee envoyee sur internet)
+- **Injection automatique** : Le texte s'insere directement ou se trouve votre curseur
+- **Indicateur sonore** : Son au debut de l'enregistrement et de la transcription
+- **Ultra leger** : Icone dans la barre des taches, pas d'interface
 
-## 📦 Contenu du package
+## Structure du projet
 
+```text
+OpenWhisper/
+├── src/                         # Code source
+│   ├── app.py                   # Application principale
+│   ├── config.py                # Configuration
+│   ├── audio_recorder.py        # Enregistrement audio
+│   ├── transcriber.py           # Transcription Whisper
+│   ├── text_injector.py         # Injection du texte
+│   └── sounds.py                # Indicateurs sonores
+├── assets/
+│   └── open.wav                 # Son d'indication
+├── scripts/
+│   ├── build.py                 # Script de build
+│   └── pyi_rth_rocm.py          # Runtime hook PyInstaller
+├── main.py                      # Point d'entree
+├── requirements.txt
+├── LICENSE
+└── README.md
 ```
-voice-to-text/
-├── main.py                      # Point d'entrée de l'application
-├── audio_recorder.py            # Gestion de l'enregistrement audio
-├── transcriber.py               # Transcription avec Whisper
-├── text_injector.py             # Injection du texte
-├── config.py                    # Configuration (modèle, langue, hotkey)
-├── requirements.txt             # Dépendances Python
-├── lancer_voice_to_text.bat     # Script de lancement rapide
-├── INSTALLATION.md              # Guide d'installation détaillé
-└── README.md                    # Ce fichier
+
+## Installation
+
+```bash
+# Cloner le repo
+git clone https://github.com/votre-username/OpenWhisper.git
+cd OpenWhisper
+
+# Creer l'environnement virtuel
+python -m venv venv
+.\venv\Scripts\activate
+
+# Installer les dependances
+pip install -r requirements.txt
+
+# Lancer l'application
+python main.py
 ```
 
-## 🚀 Installation rapide
+## Build
 
-1. **Installer Python 3.9+** (cochez "Add Python to PATH")
-2. **Extraire le ZIP** dans un dossier
-3. **Ouvrir PowerShell** dans ce dossier (Shift + clic droit)
-4. **Créer l'environnement virtuel** :
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate
-   ```
-5. **Installer les dépendances** :
-   ```bash
-   pip install -r requirements.txt
-   ```
-6. **Lancer l'application** :
-   ```bash
-   python main.py
-   ```
+```bash
+python scripts/build.py
+```
 
-**📖 Pour le guide complet**, consultez `INSTALLATION.md`
+L'executable sera genere dans `dist/OpenWhisper.exe`.
 
-## 🎯 Utilisation
+## Utilisation
 
-1. Lancez l'application (icône rouge dans la barre des tâches)
-2. Placez votre curseur dans n'importe quel champ de texte
-3. **Maintenez `Ctrl + Espace`** et parlez
-4. **Relâchez** → Le texte apparaît automatiquement !
+1. Lancez `OpenWhisper.exe` (mode administrateur recommande)
+2. Icone rouge dans la barre des taches
+3. **`Ctrl + Espace`** → enregistrement (son + icone verte)
+4. **`Ctrl + Espace`** → transcription + injection (son)
 
-## ⚙️ Configuration
+## Configuration
 
-Modifiez `config.py` pour personnaliser :
+Modifiez `src/config.py` :
 
-- **Modèle** : `tiny` (rapide) → `base` (défaut) → `small` (précis)
-- **Langue** : `fr`, `en`, `es`, `de`, etc.
-- **Raccourci** : `ctrl+space`, `ctrl+shift+v`, etc.
+```python
+WHISPER_MODEL = "base"      # tiny, base, small, medium, large
+LANGUAGE = "fr"             # Code langue ISO
+HOTKEY = "ctrl+space"       # Raccourci clavier
+```
 
-## 📊 Performances recommandées
+## Licence
 
-| Configuration | Modèle | Vitesse de transcription |
-|---------------|--------|--------------------------|
-| PC classique  | `base` | ~2-3 secondes |
-| PC puissant   | `small` | ~3-5 secondes |
-| Avec GPU      | `medium` | ~2-4 secondes |
-
-## 🔧 Dépannage rapide
-
-- **Erreur "keyboard"** → Lancez PowerShell en Administrateur
-- **Pas de son** → Vérifiez votre micro dans Paramètres Windows
-- **Texte non inséré** → Vérifiez que le champ est bien actif
-
-## 📄 Licence
-
-Ce projet est fourni tel quel, sans garantie. Utilisation libre pour usage personnel et commercial.
-
----
-
-**Développé par William - Janvier 2025**
+MIT License - voir [LICENSE](LICENSE)
