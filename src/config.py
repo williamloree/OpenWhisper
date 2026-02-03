@@ -23,3 +23,7 @@ HOTKEY = "ctrl+space"
 
 # Durée minimale d'enregistrement (secondes)
 MIN_RECORDING_DURATION = 0.3
+
+# Délai avant déchargement du modèle (secondes)
+# Le modèle est déchargé de la RAM après ce délai d'inactivité
+MODEL_UNLOAD_DELAY = 300  # 5 minutes
