@@ -245,7 +245,7 @@ class OpenWhisperApp:
             # Demarrer l'animation spinner
             self.is_transcribing = True
             self._start_spinner()
-            sounds.play_start_transcription()
+            sounds.play_stop_recording()
             print("[...] Transcription en cours...")
 
             text = self.transcriber.transcribe(audio_data)

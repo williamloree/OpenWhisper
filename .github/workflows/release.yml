@@ -83,8 +83,9 @@ jobs:
             --name OpenWhisper `
             --icon icon.ico `
             --paths . `
-            --add-data "assets/open.wav;." `
-            --add-data "assets/finish.mp3;." `
+            --add-data "assets/on.wav;." `
+            --add-data "assets/off.wav;." `
+            --add-data "assets/finish.wav;." `
             --runtime-hook "scripts/pyi_rth_rocm.py" `
             --hidden-import pystray._impl.comtypes `
             --hidden-import comtypes `
@@ -106,8 +107,9 @@ jobs:
             --noconsole \
             --name OpenWhisper \
             --paths . \
-            --add-data "assets/open.wav:." \
-            --add-data "assets/finish.mp3:." \
+            --add-data "assets/on.wav:." \
+            --add-data "assets/off.wav:." \
+            --add-data "assets/finish.wav:." \
             --collect-all ctranslate2 \
             --collect-all sounddevice \
             --collect-all _sounddevice_data \

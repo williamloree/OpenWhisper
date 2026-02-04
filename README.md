@@ -134,8 +134,10 @@ OpenWhisper/
 │   ├── text_injector.py         # Injection du texte
 │   └── sounds.py                # Indicateurs sonores
 ├── assets/
-│   ├── open.wav                 # Son de debut
-│   └── finish.mp3               # Son de fin
+│   ├── on.wav                   # Son debut enregistrement
+│   ├── off.wav                  # Son fin enregistrement
+│   ├── finish.wav               # Son fin transcription
+│   └── img/                     # Logo
 ├── scripts/
 │   ├── build.py                 # Script de build (Windows)
 │   └── pyi_rth_rocm.py          # Runtime hook PyInstaller

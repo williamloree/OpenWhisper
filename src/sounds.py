@@ -8,23 +8,20 @@ import platform
 def _get_sound_path(filename):
     """Retourne le chemin du fichier son"""
     if getattr(sys, 'frozen', False):
-        # Mode exe: fichier dans le dossier temporaire PyInstaller
         return os.path.join(sys._MEIPASS, filename)
     else:
-        # Mode dev: fichier dans assets/
         return os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", filename)
 
 
 def _play_sound_windows(filepath):
     """Joue un fichier audio sur Windows"""
-    import ctypes
     ext = os.path.splitext(filepath)[1].lower()
 
     if ext == '.wav':
         import winsound
         winsound.PlaySound(filepath, winsound.SND_FILENAME | winsound.SND_ASYNC)
     else:
-        # MP3 via Windows MCI
+        import ctypes
         winmm = ctypes.windll.winmm
         winmm.mciSendStringW('close mp3_sound', None, 0, 0)
         winmm.mciSendStringW(f'open "{filepath}" type mpegvideo alias mp3_sound', None, 0, 0)
@@ -37,10 +34,9 @@ def _play_sound_unix(filepath):
         import subprocess
         system = platform.system()
 
-        if system == 'Darwin':  # macOS
+        if system == 'Darwin':
             subprocess.Popen(['afplay', filepath], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        else:  # Linux
-            # Essayer plusieurs lecteurs audio
+        else:
             for player in ['paplay', 'aplay', 'ffplay']:
                 try:
                     if player == 'ffplay':
@@ -68,24 +64,24 @@ def _play_sound(filepath):
 
 
 def play_start_recording():
-    """Son de debut d'enregistrement"""
+    """Son de debut d'enregistrement (on.wav)"""
     def _play():
-        path = _get_sound_path("open.wav")
+        path = _get_sound_path("on.wav")
         _play_sound(path)
     threading.Thread(target=_play, daemon=True).start()
 
 
-def play_start_transcription():
-    """Son de debut de transcription"""
+def play_stop_recording():
+    """Son de fin d'enregistrement (off.wav)"""
     def _play():
-        path = _get_sound_path("open.wav")
+        path = _get_sound_path("off.wav")
         _play_sound(path)
     threading.Thread(target=_play, daemon=True).start()
 
 
 def play_done():
-    """Son de fin de transcription"""
+    """Son de fin de transcription (finish.wav)"""
     def _play():
-        path = _get_sound_path("finish.mp3")
+        path = _get_sound_path("finish.wav")
         _play_sound(path)
     threading.Thread(target=_play, daemon=True).start()
