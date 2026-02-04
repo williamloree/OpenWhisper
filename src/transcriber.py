@@ -12,6 +12,14 @@ class Transcriber:
         threading.Thread(target=self._load_model, daemon=True).start()
 
     def _load_model(self):
+        # Fix SSL certificates for PyInstaller bundle
+        try:
+            import ssl
+            import certifi
+            ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            pass
+
         try:
             from faster_whisper import WhisperModel
             print(f"[Whisper] Chargement du modele '{WHISPER_MODEL}'...")
@@ -22,8 +30,10 @@ class Transcriber:
             )
             print("[Whisper] Modele charge")
         except Exception as e:
+            import traceback
             self._error = str(e)
             print(f"[Whisper] ERREUR chargement: {e}")
+            print(f"[Whisper] Traceback:\n{traceback.format_exc()}")
         finally:
             self._ready.set()
 

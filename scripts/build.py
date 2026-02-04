@@ -123,6 +123,7 @@ def main():
         "--collect-all", "pystray",
         "--collect-all", "comtypes",
         "--collect-all", "keyboard",
+        "--collect-data", "certifi",
     ]
 
     # Inclure logo.png dans le package si disponible

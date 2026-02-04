@@ -88,7 +88,8 @@ jobs:
             --collect-all faster_whisper `
             --collect-all pystray `
             --collect-all comtypes `
-            --collect-all keyboard
+            --collect-all keyboard `
+            --collect-data certifi
 
       - name: Build executable (Linux/macOS)
         if: matrix.os != 'windows-latest'
@@ -106,7 +107,8 @@ jobs:
             --collect-all _sounddevice_data \
             --collect-all faster_whisper \
             --collect-all pystray \
-            --collect-all keyboard
+            --collect-all keyboard \
+            --collect-data certifi
 
       - name: Verify build (Windows)
         if: matrix.os == 'windows-latest'
