@@ -79,8 +79,8 @@ class AudioRecorder:
             return None
 
         # Convertir en array numpy
-        audio_data = np.concatenate(self.frames, axis=0)
-        return audio_data.flatten()
+        audio_data = np.concatenate(self.frames, axis=0).flatten()
+        return audio_data
 
     def is_recording(self):
         return self.recording

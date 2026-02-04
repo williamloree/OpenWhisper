@@ -25,36 +25,106 @@ class OpenWhisperApp:
         self.injector = TextInjector()
         self.is_running = True
         self.is_recording = False
+        self.is_transcribing = False
         self.record_start_time = None
         self._toggle_cooldown = 0
+        self._spinner_frame = 0
+        self._spinner_thread = None
+        self._logo_base = self._load_logo()
+
+    # ── Asset path (dev + exe) ──────────────────────────
+
+    @staticmethod
+    def _get_asset_path(filename):
+        if getattr(sys, 'frozen', False):
+            return os.path.join(sys._MEIPASS, filename)
+        return os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", filename)
+
+    # ── Logo ────────────────────────────────────────────
+
+    def _load_logo(self):
+        """Charge le logo depuis assets/logo.png"""
+        logo_path = self._get_asset_path(os.path.join("img", "logo.png"))
+        if os.path.exists(logo_path):
+            try:
+                img = Image.open(logo_path).convert("RGBA").resize((64, 64), Image.LANCZOS)
+                print(f"[Logo] Charge depuis: {logo_path}")
+                return img
+            except Exception as e:
+                print(f"[Logo] Erreur chargement: {e}")
+        return None
 
     # ── Icone ──────────────────────────────────────────
 
-    def _create_icon_image(self, recording=False):
-        """Cercle vert si enregistrement en cours, rouge sinon"""
+    def _create_icon_image(self, state="idle"):
+        """
+        Cree l'icone tray selon l'etat :
+          idle          -> logo + point rouge (bas droite)
+          recording     -> logo + point vert  (bas droite)
+          transcribing  -> logo + arc spinner (jaune) + point jaune
+        """
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+
+        if self._logo_base:
+            img.paste(self._logo_base, (0, 0), self._logo_base)
+        else:
+            dc = ImageDraw.Draw(img)
+            dc.ellipse([4, 4, 60, 60], fill=(50, 50, 50))
+
         dc = ImageDraw.Draw(img)
-        color = (0, 200, 0) if recording else (220, 50, 50)
-        dc.ellipse([8, 8, 56, 56], fill=color)
+
+        if state == "recording":
+            dc.ellipse([46, 46, 60, 60], fill=(0, 200, 0), outline=(0, 150, 0))
+        elif state == "transcribing":
+            angle = (self._spinner_frame * 30) % 360
+            dc.arc([2, 2, 62, 62], angle, angle + 100, fill=(50, 180, 255), width=5)
+            dc.ellipse([46, 46, 60, 60], fill=(255, 180, 0), outline=(200, 140, 0))
+        else:  # idle
+            dc.ellipse([46, 46, 60, 60], fill=(220, 50, 50), outline=(170, 30, 30))
+
         return img
 
     def create_tray_icon(self):
         self.icon = pystray.Icon(
             "open_whisper",
-            self._create_icon_image(False),
+            self._create_icon_image("idle"),
             "OpenWhisper",
             pystray.Menu(self._menu_items),
         )
 
     def _menu_items(self):
         """Menu dynamique - regenere a chaque ouverture"""
-        status = "[REC] Enregistrement en cours..." if self.is_recording else "[OFF] En attente"
+        if self.is_recording:
+            status = "[REC] Enregistrement en cours..."
+        elif self.is_transcribing:
+            status = "[...] Transcription en cours..."
+        else:
+            status = "[OFF] En attente"
         startup_suffix = " *" if self._is_startup_enabled() else ""
         yield pystray.MenuItem(status, None, enabled=False)
         yield pystray.MenuItem(f"Hotkey : {HOTKEY}", None, enabled=False)
         if IS_WINDOWS:
             yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
         yield pystray.MenuItem("Quitter", self.quit_app)
+
+    # ── Spinner (animation pendant transcription) ───────
+
+    def _start_spinner(self):
+        self._spinner_frame = 0
+        self._spinner_thread = threading.Thread(target=self._spinner_loop, daemon=True)
+        self._spinner_thread.start()
+
+    def _stop_spinner(self):
+        self.is_transcribing = False
+        if self._spinner_thread and self._spinner_thread.is_alive():
+            self._spinner_thread.join(timeout=0.2)
+        self._spinner_thread = None
+
+    def _spinner_loop(self):
+        while self.is_transcribing:
+            self._spinner_frame += 1
+            self.icon.icon = self._create_icon_image("transcribing")
+            time.sleep(0.1)
 
     # ── Demarrage automatique ───────────────────────────
 
@@ -103,11 +173,18 @@ class OpenWhisperApp:
                 import ctypes
                 kernel32 = ctypes.windll.kernel32
                 user32 = ctypes.windll.user32
+                kernel32.GlobalAlloc.restype = ctypes.c_void_p
+                kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+                kernel32.GlobalLock.restype = ctypes.c_void_p
+                kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+                kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+                user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+                encoded = text.encode('utf-16-le') + b'\x00\x00'
                 user32.OpenClipboard(0)
                 user32.EmptyClipboard()
-                hMem = kernel32.GlobalAlloc(0x0042, len(text.encode('utf-16-le')) + 2)
+                hMem = kernel32.GlobalAlloc(0x0042, len(encoded))
                 pMem = kernel32.GlobalLock(hMem)
-                ctypes.cdll.msvcrt.wcscpy(ctypes.c_wchar_p(pMem), text)
+                ctypes.memmove(pMem, encoded, len(encoded))
                 kernel32.GlobalUnlock(hMem)
                 user32.SetClipboardData(13, hMem)
                 user32.CloseClipboard()
@@ -148,7 +225,7 @@ class OpenWhisperApp:
         if not self.recorder.start():
             self.is_recording = False
             return
-        self.icon.icon = self._create_icon_image(True)
+        self.icon.icon = self._create_icon_image("recording")
         sounds.play_start_recording()
         print("[REC] Enregistrement demarre...")
 
@@ -156,18 +233,27 @@ class OpenWhisperApp:
         duration = time.time() - self.record_start_time
         audio_data = self.recorder.stop()
         self.is_recording = False
-        self.icon.icon = self._create_icon_image(False)
 
         if duration < MIN_RECORDING_DURATION:
+            self.icon.icon = self._create_icon_image("idle")
             print(f"[!] Enregistrement trop court ({duration:.2f}s)")
             return
 
         print("[STOP] Enregistrement arrete")
 
         if audio_data is not None and len(audio_data) > 0:
+            # Demarrer l'animation spinner
+            self.is_transcribing = True
+            self._start_spinner()
             sounds.play_start_transcription()
             print("[...] Transcription en cours...")
+
             text = self.transcriber.transcribe(audio_data)
+
+            # Arreter le spinner et revenir a idle
+            self._stop_spinner()
+            self.icon.icon = self._create_icon_image("idle")
+
             if text:
                 print(f"[OK] Transcrit: {text}")
                 self._copy_to_clipboard(text)
@@ -177,6 +263,7 @@ class OpenWhisperApp:
             else:
                 print("[!] Aucun texte detecte")
         else:
+            self.icon.icon = self._create_icon_image("idle")
             print("[!] Pas d'audio enregistre")
 
     # ── Cycle de vie ────────────────────────────────────
