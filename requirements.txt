@@ -6,3 +6,4 @@ pyperclip==1.8.2
 scipy==1.11.4
 pystray==0.19.5
 Pillow==10.1.0
+comtypes>=1.4.0; sys_platform == 'win32'

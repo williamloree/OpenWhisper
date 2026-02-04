@@ -74,6 +74,7 @@ class OpenWhisperApp:
           idle          -> logo + point rouge (bas droite)
           recording     -> logo + point vert  (bas droite)
           transcribing  -> logo + arc spinner bleu + point jaune
+          error         -> logo grise + croix rouge
         """
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
 
@@ -86,6 +87,15 @@ class OpenWhisperApp:
             dc = ImageDraw.Draw(img)
             angle = (self._spinner_frame * 30) % 360
             dc.arc([2, 2, 62, 62], angle, angle + 100, fill=(255, 140, 0), width=5)
+        elif state == "error":
+            if self._logo_gray:
+                img.paste(self._logo_gray, (0, 0), self._logo_gray)
+            else:
+                dc = ImageDraw.Draw(img)
+                dc.ellipse([4, 4, 60, 60], fill=(80, 80, 80))
+            dc = ImageDraw.Draw(img)
+            dc.line([44, 44, 60, 60], fill=(255, 50, 50), width=4)
+            dc.line([60, 44, 44, 60], fill=(255, 50, 50), width=4)
         else:
             if self._logo_base:
                 img.paste(self._logo_base, (0, 0), self._logo_base)
@@ -118,6 +128,8 @@ class OpenWhisperApp:
         """Menu dynamique - regenere a chaque ouverture"""
         if self.is_model_loading:
             status = "[...] Chargement du modele Whisper..."
+        elif self.transcriber.has_error():
+            status = "[ERR] Erreur chargement modele"
         elif self.is_recording:
             status = "[REC] Enregistrement en cours..."
         elif self.is_transcribing:
@@ -151,8 +163,12 @@ class OpenWhisperApp:
             # Verifier si le modele est charge
             if self.transcriber.is_ready():
                 self.is_model_loading = False
-                self.icon.icon = self._create_icon_image("idle")
-                print("[OK] Modele pret - Hotkey active")
+                if self.transcriber.has_error():
+                    self.icon.icon = self._create_icon_image("error")
+                    print(f"[ERREUR] Chargement modele echoue: {self.transcriber.get_error()}")
+                else:
+                    self.icon.icon = self._create_icon_image("idle")
+                    print("[OK] Modele pret - Hotkey active")
                 break
         self._loading_thread = None
 
@@ -260,6 +276,11 @@ class OpenWhisperApp:
         # Bloquer si le modele n'est pas charge
         if self.is_model_loading:
             print("[!] Modele en cours de chargement, veuillez patienter...")
+            return
+
+        # Bloquer si le modele est en erreur
+        if self.transcriber.has_error():
+            print(f"[!] Modele non disponible: {self.transcriber.get_error()}")
             return
 
         now = time.time()

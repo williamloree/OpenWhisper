@@ -8,22 +8,36 @@ class Transcriber:
     def __init__(self):
         self.model = None
         self._ready = threading.Event()
+        self._error = None
         threading.Thread(target=self._load_model, daemon=True).start()
 
     def _load_model(self):
-        from faster_whisper import WhisperModel
-        print(f"[Whisper] Chargement du modele '{WHISPER_MODEL}'...")
-        self.model = WhisperModel(
-            WHISPER_MODEL,
-            device=DEVICE,
-            compute_type=COMPUTE_TYPE
-        )
-        print("[Whisper] Modele charge")
-        self._ready.set()
+        try:
+            from faster_whisper import WhisperModel
+            print(f"[Whisper] Chargement du modele '{WHISPER_MODEL}'...")
+            self.model = WhisperModel(
+                WHISPER_MODEL,
+                device=DEVICE,
+                compute_type=COMPUTE_TYPE
+            )
+            print("[Whisper] Modele charge")
+        except Exception as e:
+            self._error = str(e)
+            print(f"[Whisper] ERREUR chargement: {e}")
+        finally:
+            self._ready.set()
 
     def is_ready(self) -> bool:
-        """Retourne True si le modele est charge"""
+        """Retourne True si le modele est charge (ou en erreur)"""
         return self._ready.is_set()
+
+    def has_error(self) -> bool:
+        """Retourne True si le chargement a echoue"""
+        return self._error is not None
+
+    def get_error(self) -> str:
+        """Retourne le message d'erreur"""
+        return self._error
 
     def transcribe(self, audio_data: np.ndarray) -> str:
         """Transcrit l'audio en texte"""
@@ -33,6 +47,10 @@ class Transcriber:
         if not self._ready.is_set():
             print("[Whisper] En attente du chargement du modele...")
         self._ready.wait()
+
+        if self.model is None:
+            print(f"[Whisper] Modele non disponible: {self._error}")
+            return ""
 
         if audio_data.dtype != np.float32:
             audio_data = audio_data.astype(np.float32)
