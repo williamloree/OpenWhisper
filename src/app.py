@@ -6,7 +6,7 @@ import os
 import threading
 import platform
 import pystray
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 from src.audio_recorder import AudioRecorder
 from src.transcriber import Transcriber
 from src.text_injector import TextInjector
@@ -26,11 +26,14 @@ class OpenWhisperApp:
         self.is_running = True
         self.is_recording = False
         self.is_transcribing = False
+        self.is_model_loading = True
         self.record_start_time = None
         self._toggle_cooldown = 0
         self._spinner_frame = 0
         self._spinner_thread = None
+        self._loading_thread = None
         self._logo_base = self._load_logo()
+        self._logo_gray = self._create_gray_logo()
 
     # ── Asset path (dev + exe) ──────────────────────────
 
@@ -43,7 +46,7 @@ class OpenWhisperApp:
     # ── Logo ────────────────────────────────────────────
 
     def _load_logo(self):
-        """Charge le logo depuis assets/logo.png"""
+        """Charge le logo depuis assets/img/logo.png"""
         logo_path = self._get_asset_path(os.path.join("img", "logo.png"))
         if os.path.exists(logo_path):
             try:
@@ -54,58 +57,104 @@ class OpenWhisperApp:
                 print(f"[Logo] Erreur chargement: {e}")
         return None
 
+    def _create_gray_logo(self):
+        """Cree une version grisee du logo pour l'etat loading"""
+        if self._logo_base:
+            gray = self._logo_base.convert("LA").convert("RGBA")
+            enhancer = ImageEnhance.Brightness(gray)
+            return enhancer.enhance(0.5)
+        return None
+
     # ── Icone ──────────────────────────────────────────
 
     def _create_icon_image(self, state="idle"):
         """
         Cree l'icone tray selon l'etat :
+          loading       -> logo grise + arc spinner orange
           idle          -> logo + point rouge (bas droite)
           recording     -> logo + point vert  (bas droite)
-          transcribing  -> logo + arc spinner (jaune) + point jaune
+          transcribing  -> logo + arc spinner bleu + point jaune
         """
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
 
-        if self._logo_base:
-            img.paste(self._logo_base, (0, 0), self._logo_base)
-        else:
+        if state == "loading":
+            if self._logo_gray:
+                img.paste(self._logo_gray, (0, 0), self._logo_gray)
+            else:
+                dc = ImageDraw.Draw(img)
+                dc.ellipse([4, 4, 60, 60], fill=(80, 80, 80))
             dc = ImageDraw.Draw(img)
-            dc.ellipse([4, 4, 60, 60], fill=(50, 50, 50))
-
-        dc = ImageDraw.Draw(img)
-
-        if state == "recording":
-            dc.ellipse([46, 46, 60, 60], fill=(0, 200, 0), outline=(0, 150, 0))
-        elif state == "transcribing":
             angle = (self._spinner_frame * 30) % 360
-            dc.arc([2, 2, 62, 62], angle, angle + 100, fill=(50, 180, 255), width=5)
-            dc.ellipse([46, 46, 60, 60], fill=(255, 180, 0), outline=(200, 140, 0))
-        else:  # idle
-            dc.ellipse([46, 46, 60, 60], fill=(220, 50, 50), outline=(170, 30, 30))
+            dc.arc([2, 2, 62, 62], angle, angle + 100, fill=(255, 140, 0), width=5)
+        else:
+            if self._logo_base:
+                img.paste(self._logo_base, (0, 0), self._logo_base)
+            else:
+                dc = ImageDraw.Draw(img)
+                dc.ellipse([4, 4, 60, 60], fill=(50, 50, 50))
+
+            dc = ImageDraw.Draw(img)
+
+            if state == "recording":
+                dc.ellipse([46, 46, 60, 60], fill=(0, 200, 0), outline=(0, 150, 0))
+            elif state == "transcribing":
+                angle = (self._spinner_frame * 30) % 360
+                dc.arc([2, 2, 62, 62], angle, angle + 100, fill=(50, 180, 255), width=5)
+                dc.ellipse([46, 46, 60, 60], fill=(255, 180, 0), outline=(200, 140, 0))
+            else:  # idle
+                dc.ellipse([46, 46, 60, 60], fill=(220, 50, 50), outline=(170, 30, 30))
 
         return img
 
     def create_tray_icon(self):
         self.icon = pystray.Icon(
             "open_whisper",
-            self._create_icon_image("idle"),
+            self._create_icon_image("loading"),
             "OpenWhisper",
             pystray.Menu(self._menu_items),
         )
 
     def _menu_items(self):
         """Menu dynamique - regenere a chaque ouverture"""
-        if self.is_recording:
+        if self.is_model_loading:
+            status = "[...] Chargement du modele Whisper..."
+        elif self.is_recording:
             status = "[REC] Enregistrement en cours..."
         elif self.is_transcribing:
             status = "[...] Transcription en cours..."
         else:
-            status = "[OFF] En attente"
+            status = "[OK] Pret"
         startup_suffix = " *" if self._is_startup_enabled() else ""
         yield pystray.MenuItem(status, None, enabled=False)
         yield pystray.MenuItem(f"Hotkey : {HOTKEY}", None, enabled=False)
         if IS_WINDOWS:
             yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
         yield pystray.MenuItem("Quitter", self.quit_app)
+
+    # ── Loading animation (pendant chargement modele) ───
+
+    def _start_loading_animation(self):
+        self._spinner_frame = 0
+        self._loading_thread = threading.Thread(target=self._loading_loop, daemon=True)
+        self._loading_thread.start()
+
+    def _stop_loading_animation(self):
+        self.is_model_loading = False
+        self._loading_thread = None
+        self.icon.icon = self._create_icon_image("idle")
+
+    def _loading_loop(self):
+        while self.is_model_loading and self.is_running:
+            self._spinner_frame += 1
+            self.icon.icon = self._create_icon_image("loading")
+            time.sleep(0.1)
+            # Verifier si le modele est charge
+            if self.transcriber.is_ready():
+                self.is_model_loading = False
+                self.icon.icon = self._create_icon_image("idle")
+                print("[OK] Modele pret - Hotkey active")
+                break
+        self._loading_thread = None
 
     # ── Spinner (animation pendant transcription) ───────
 
@@ -194,7 +243,6 @@ class OpenWhisperApp:
                 process.communicate(text.encode('utf-8'))
             else:  # Linux
                 import subprocess
-                # Essayer xclip ou xsel
                 for cmd in [['xclip', '-selection', 'clipboard'], ['xsel', '--clipboard', '--input']]:
                     try:
                         process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -209,6 +257,11 @@ class OpenWhisperApp:
 
     def toggle_recording(self):
         """Appui unique = demarrer OU arreter"""
+        # Bloquer si le modele n'est pas charge
+        if self.is_model_loading:
+            print("[!] Modele en cours de chargement, veuillez patienter...")
+            return
+
         now = time.time()
         if now - self._toggle_cooldown < 0.3:
             return
@@ -242,7 +295,6 @@ class OpenWhisperApp:
         print("[STOP] Enregistrement arrete")
 
         if audio_data is not None and len(audio_data) > 0:
-            # Demarrer l'animation spinner
             self.is_transcribing = True
             self._start_spinner()
             sounds.play_stop_recording()
@@ -250,7 +302,6 @@ class OpenWhisperApp:
 
             text = self.transcriber.transcribe(audio_data)
 
-            # Arreter le spinner et revenir a idle
             self._stop_spinner()
             self.icon.icon = self._create_icon_image("idle")
 
@@ -270,6 +321,7 @@ class OpenWhisperApp:
 
     def quit_app(self, icon=None, item=None):
         self.is_running = False
+        self.is_model_loading = False
         if self.recorder.is_recording():
             self.recorder.stop()
         self.icon.stop()
@@ -283,8 +335,12 @@ class OpenWhisperApp:
         print("  1er appui  -> demarrer l'enregistrement")
         print("  2eme appui -> arreter + transcrire")
         print("=" * 50)
+        print("[...] Chargement du modele Whisper...")
 
         keyboard.add_hotkey(HOTKEY, self.toggle_recording)
+
+        # Demarrer l'animation de chargement
+        self._start_loading_animation()
 
         tray_thread = threading.Thread(target=self.icon.run, daemon=True)
         tray_thread.start()

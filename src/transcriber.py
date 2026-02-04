@@ -21,6 +21,10 @@ class Transcriber:
         print("[Whisper] Modele charge")
         self._ready.set()
 
+    def is_ready(self) -> bool:
+        """Retourne True si le modele est charge"""
+        return self._ready.is_set()
+
     def transcribe(self, audio_data: np.ndarray) -> str:
         """Transcrit l'audio en texte"""
         if audio_data is None or len(audio_data) == 0:
