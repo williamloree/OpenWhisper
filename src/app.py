@@ -5,12 +5,18 @@ import sys
 import os
 import threading
 import platform
+import webbrowser
 import pystray
 from PIL import Image, ImageDraw, ImageEnhance
 from src.audio_recorder import AudioRecorder
 from src.transcriber import Transcriber
 from src.text_injector import TextInjector
-from src.config import HOTKEY, MIN_RECORDING_DURATION
+from src.config import MIN_RECORDING_DURATION
+from src.settings import Settings
+from src.version import VERSION, GITHUB_REPO
+from src.updater import UpdateChecker
+from src.ui.settings_window import SettingsWindow
+from src.ui.recording_overlay import RecordingOverlay
 from src import sounds
 
 IS_WINDOWS = platform.system() == 'Windows'
@@ -20,8 +26,11 @@ IS_LINUX = platform.system() == 'Linux'
 
 class OpenWhisperApp:
     def __init__(self):
+        # Settings persistants
+        self.settings = Settings()
+
         self.recorder = AudioRecorder()
-        self.transcriber = Transcriber()
+        self.transcriber = Transcriber(self.settings)
         self.injector = TextInjector()
         self.is_running = True
         self.is_recording = False
@@ -34,6 +43,19 @@ class OpenWhisperApp:
         self._loading_thread = None
         self._logo_base = self._load_logo()
         self._logo_gray = self._create_gray_logo()
+
+        # Update checker
+        self.update_checker = UpdateChecker(VERSION, GITHUB_REPO)
+        self.update_available = False
+        self.latest_version = None
+        self.download_url = None
+
+        # UI components
+        self.settings_window = SettingsWindow(self.settings, self._on_settings_saved)
+        self.recording_overlay = RecordingOverlay(self.settings.overlay_position)
+
+        # Hotkey actuel (pour re-enregistrement)
+        self._current_hotkey = self.settings.hotkey
 
     # ── Asset path (dev + exe) ──────────────────────────
 
@@ -136,11 +158,29 @@ class OpenWhisperApp:
             status = "[...] Transcription en cours..."
         else:
             status = "[OK] Pret"
+
         startup_suffix = " *" if self._is_startup_enabled() else ""
+        hotkey = self.settings.hotkey
+
         yield pystray.MenuItem(status, None, enabled=False)
-        yield pystray.MenuItem(f"Hotkey : {HOTKEY}", None, enabled=False)
+        yield pystray.MenuItem(f"Hotkey : {hotkey}", None, enabled=False)
+        yield pystray.Menu.SEPARATOR
+
+        # Mise a jour disponible
+        if self.update_available and self.latest_version:
+            yield pystray.MenuItem(
+                f"Mise a jour disponible: v{self.latest_version}",
+                self._open_download_page
+            )
+            yield pystray.Menu.SEPARATOR
+
+        # Parametres
+        yield pystray.MenuItem("Parametres...", self._open_settings)
+
         if IS_WINDOWS:
             yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
+
+        yield pystray.Menu.SEPARATOR
         yield pystray.MenuItem("Quitter", self.quit_app)
 
     # ── Loading animation (pendant chargement modele) ───
@@ -229,6 +269,59 @@ class OpenWhisperApp:
             winreg.CloseKey(key)
             print("Demarrage automatique : active")
 
+    # ── Parametres et mises a jour ────────────────────
+
+    def _open_settings(self, icon=None, item=None):
+        """Ouvre la fenetre de parametres"""
+        if self.is_recording:
+            print("[!] Impossible d'ouvrir les parametres pendant l'enregistrement")
+            return
+
+        # Attendre que l'overlay soit completement ferme
+        if self.recording_overlay.is_visible:
+            print("[!] Attente fermeture overlay...")
+            self.recording_overlay.hide()
+
+        # Attendre un peu pour que le thread tkinter de l'overlay soit nettoye
+        time.sleep(0.2)
+
+        self.settings_window.show()
+
+    def _open_download_page(self, icon=None, item=None):
+        """Ouvre la page de telechargement dans le navigateur"""
+        if self.download_url:
+            webbrowser.open(self.download_url)
+
+    def _on_settings_saved(self, model_changed: bool, hotkey_changed: bool):
+        """Callback appele apres sauvegarde des parametres"""
+        print("[Settings] Parametres sauvegardes")
+
+        # Re-enregistrer le hotkey si change
+        if hotkey_changed:
+            try:
+                keyboard.remove_hotkey(self._current_hotkey)
+            except Exception:
+                pass
+            self._current_hotkey = self.settings.hotkey
+            keyboard.add_hotkey(self._current_hotkey, self.toggle_recording)
+            print(f"[Settings] Hotkey change: {self._current_hotkey}")
+
+        # Recharger le modele si necessaire
+        if model_changed:
+            print("[Settings] Rechargement du modele...")
+            self.is_model_loading = True
+            self.icon.icon = self._create_icon_image("loading")
+            self.transcriber = Transcriber(self.settings)
+            self._start_loading_animation()
+
+    def _on_update_checked(self, has_update: bool, version: str, url: str):
+        """Callback appele apres verification des mises a jour"""
+        self.update_available = has_update
+        self.latest_version = version
+        self.download_url = url
+        if has_update:
+            print(f"[Update] Nouvelle version disponible: v{version}")
+
     # ── Presse-papier (cross-platform) ─────────────────
 
     def _copy_to_clipboard(self, text):
@@ -296,10 +389,21 @@ class OpenWhisperApp:
     def _start_recording(self):
         self.is_recording = True
         self.record_start_time = time.time()
-        if not self.recorder.start():
+
+        # Callback pour la waveform
+        def on_audio(samples):
+            if self.recording_overlay.is_visible:
+                self.recording_overlay.update_waveform(samples)
+
+        if not self.recorder.start(on_audio_callback=on_audio):
             self.is_recording = False
             return
+
         self.icon.icon = self._create_icon_image("recording")
+
+        # Afficher l'overlay
+        self.recording_overlay.show()
+
         sounds.play_start_recording()
         print("[REC] Enregistrement demarre...")
 
@@ -307,6 +411,12 @@ class OpenWhisperApp:
         duration = time.time() - self.record_start_time
         audio_data = self.recorder.stop()
         self.is_recording = False
+
+        # Cacher l'overlay et sauvegarder la position
+        overlay_pos = self.recording_overlay.hide()
+        if overlay_pos:
+            self.settings.set("overlay_position", overlay_pos)
+            self.settings.save()
 
         if duration < MIN_RECORDING_DURATION:
             self.icon.icon = self._create_icon_image("idle")
@@ -349,16 +459,20 @@ class OpenWhisperApp:
         sys.exit(0)
 
     def run(self):
+        hotkey = self.settings.hotkey
         print("=" * 50)
-        print("  OpenWhisper - Demarre")
-        print(f"  Hotkey : {HOTKEY}  (mode toggle)")
+        print(f"  OpenWhisper v{VERSION} - Demarre")
+        print(f"  Hotkey : {hotkey}  (mode toggle)")
         print(f"  Plateforme : {platform.system()}")
         print("  1er appui  -> demarrer l'enregistrement")
         print("  2eme appui -> arreter + transcrire")
         print("=" * 50)
         print("[...] Chargement du modele Whisper...")
 
-        keyboard.add_hotkey(HOTKEY, self.toggle_recording)
+        keyboard.add_hotkey(hotkey, self.toggle_recording)
+
+        # Verifier les mises a jour en arriere-plan
+        self.update_checker.check_async(self._on_update_checked)
 
         # Demarrer l'animation de chargement
         self._start_loading_animation()

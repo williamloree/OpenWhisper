@@ -10,6 +10,7 @@ class AudioRecorder:
         self.frames = []
         self.stream = None
         self.device = self._find_input_device()
+        self._on_audio_callback = None  # Callback pour waveform temps reel
 
     def _find_input_device(self):
         """Trouve un peripherique d'entree valide"""
@@ -33,20 +34,31 @@ class AudioRecorder:
 
         return None
 
-    def start(self):
-        """Demarre l'enregistrement audio"""
+    def start(self, on_audio_callback=None):
+        """Demarre l'enregistrement audio
+
+        Args:
+            on_audio_callback: Callback appele avec les samples audio (pour waveform)
+        """
         if self.device is None:
             print("[!] Aucun peripherique audio trouve")
             return False
 
         self.recording = True
         self.frames = []
+        self._on_audio_callback = on_audio_callback
 
         def callback(indata, frames, time, status):
             if status:
                 print(f"[Audio] Status: {status}")
             if self.recording:
                 self.frames.append(indata.copy())
+                # Appeler le callback waveform si defini
+                if self._on_audio_callback:
+                    try:
+                        self._on_audio_callback(indata.copy())
+                    except Exception:
+                        pass
 
         try:
             self.stream = sd.InputStream(
