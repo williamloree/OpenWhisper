@@ -5,10 +5,24 @@ import threading
 
 
 class Transcriber:
-    def __init__(self):
+    def __init__(self, settings=None):
         self.model = None
         self._ready = threading.Event()
         self._error = None
+        self._settings = settings
+
+        # Utiliser les settings si fournis, sinon les defaults de config
+        if settings:
+            self._model_name = settings.whisper_model
+            self._language = settings.language
+            self._device = settings.device
+            self._compute_type = settings.compute_type
+        else:
+            self._model_name = WHISPER_MODEL
+            self._language = LANGUAGE
+            self._device = DEVICE
+            self._compute_type = COMPUTE_TYPE
+
         threading.Thread(target=self._load_model, daemon=True).start()
 
     def _load_model(self):
@@ -22,11 +36,11 @@ class Transcriber:
 
         try:
             from faster_whisper import WhisperModel
-            print(f"[Whisper] Chargement du modele '{WHISPER_MODEL}'...")
+            print(f"[Whisper] Chargement du modele '{self._model_name}'...")
             self.model = WhisperModel(
-                WHISPER_MODEL,
-                device=DEVICE,
-                compute_type=COMPUTE_TYPE
+                self._model_name,
+                device=self._device,
+                compute_type=self._compute_type
             )
             print("[Whisper] Modele charge")
         except Exception as e:
@@ -65,9 +79,12 @@ class Transcriber:
         if audio_data.dtype != np.float32:
             audio_data = audio_data.astype(np.float32)
 
+        # Utiliser la langue des settings si disponible
+        language = self._language
+
         segments, info = self.model.transcribe(
             audio_data,
-            language=LANGUAGE,
+            language=language,
             beam_size=5,
             vad_filter=True,
             vad_parameters={
