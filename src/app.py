@@ -52,7 +52,8 @@ class OpenWhisperApp:
 
         # UI components
         self.settings_window = SettingsWindow(self.settings, self._on_settings_saved)
-        self.recording_overlay = RecordingOverlay(self.settings.overlay_position)
+        # Toujours centrer l'overlay au demarrage (ignorer position sauvegardee)
+        self.recording_overlay = RecordingOverlay(None)
 
         # Hotkey actuel (pour re-enregistrement)
         self._current_hotkey = self.settings.hotkey
@@ -174,11 +175,11 @@ class OpenWhisperApp:
             )
             yield pystray.Menu.SEPARATOR
 
-        # Parametres
-        yield pystray.MenuItem("Parametres...", self._open_settings)
+        # Parametres (desactive temporairement)
+        # yield pystray.MenuItem("Parametres...", self._open_settings)
 
-        if IS_WINDOWS:
-            yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
+        # if IS_WINDOWS:
+        #     yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
 
         yield pystray.Menu.SEPARATOR
         yield pystray.MenuItem("Quitter", self.quit_app)

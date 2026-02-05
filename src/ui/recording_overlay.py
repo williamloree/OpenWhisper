@@ -93,13 +93,28 @@ class RecordingOverlay:
             window.attributes("-topmost", True)
 
             # Forcer la mise a jour pour obtenir les dimensions ecran
+            root.update_idletasks()
             window.update_idletasks()
+
+            # Obtenir la largeur de l'ecran (methode plus fiable sur Windows)
+            if IS_WINDOWS:
+                try:
+                    import ctypes
+                    user32 = ctypes.windll.user32
+                    screen_w = user32.GetSystemMetrics(0)  # SM_CXSCREEN
+                except Exception:
+                    screen_w = root.winfo_screenwidth()
+            else:
+                screen_w = root.winfo_screenwidth()
 
             # Position (centre-haut par defaut)
             if self._position:
                 x, y = self._position
+                # Verifier que la position est valide (dans l'ecran)
+                if x < 0 or x > screen_w - self.WIDTH or y < 0:
+                    x = (screen_w - self.WIDTH) // 2
+                    y = 30
             else:
-                screen_w = root.winfo_screenwidth()
                 x = (screen_w - self.WIDTH) // 2
                 y = 30
 
@@ -210,8 +225,8 @@ class RecordingOverlay:
                                 # Peak amplitude pour plus de reactivite
                                 amp = np.max(np.abs(chunk))
                                 new_bars.append(amp)
-                            # Amplification massive
-                            new_bars = np.array(new_bars) * 150
+                            # Amplification moderee
+                            new_bars = np.array(new_bars) * 80
                             # Remplacement direct pour max reactivite
                             waveform_data = new_bars
                 except queue.Empty:
