@@ -176,7 +176,7 @@ class OpenWhisperApp:
             yield pystray.Menu.SEPARATOR
 
         # Parametres (desactive temporairement)
-        # yield pystray.MenuItem("Parametres...", self._open_settings)
+        yield pystray.MenuItem("Parametres...", self._open_settings)
 
         # if IS_WINDOWS:
         #     yield pystray.MenuItem(f"Demarrer au demarrage{startup_suffix}", self._toggle_startup)
