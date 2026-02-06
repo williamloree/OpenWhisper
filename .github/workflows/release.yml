@@ -7,27 +7,13 @@ on:
 
 permissions:
   contents: write
+  actions: read
+  id-token: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            name: Windows
-            artifact: OpenWhisper.exe
-            pyinstaller_sep: ";"
-          - os: ubuntu-latest
-            name: Linux
-            artifact: OpenWhisper
-            pyinstaller_sep: ":"
-          - os: macos-latest
-            name: macOS
-            artifact: OpenWhisper
-            pyinstaller_sep: ":"
-
-    runs-on: ${{ matrix.os }}
-    name: Build (${{ matrix.name }})
+  build-windows:
+    runs-on: windows-latest
+    name: Build & Sign (Windows)
 
     steps:
       - name: Checkout code
@@ -38,32 +24,19 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install system dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y portaudio19-dev python3-dev
-
-      - name: Install system dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install portaudio
-
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Create ROCm directories (Windows ctranslate2 fix)
-        if: matrix.os == 'windows-latest'
+      - name: Create ROCm directories (ctranslate2 fix)
         run: |
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
           New-Item -ItemType Directory -Force -Path "$sitePackages\_rocm_sdk_core\bin"
           New-Item -ItemType Directory -Force -Path "$sitePackages\_rocm_sdk_libraries_custom\bin"
 
-      - name: Generate icon (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Generate icon
         run: |
           python -c "
           from PIL import Image, ImageDraw
@@ -74,8 +47,7 @@ jobs:
           img.save('icon.ico')
           "
 
-      - name: Build executable (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Build executable
         run: |
           pyinstaller main.py `
             --onefile `
@@ -101,8 +73,62 @@ jobs:
             --collect-all keyboard `
             --collect-data certifi
 
-      - name: Build executable (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Rename artifact
+        run: mv dist/OpenWhisper.exe dist/OpenWhisper-Windows.exe
+        shell: bash
+
+      - name: Upload unsigned artifact
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWhisper-Windows-unsigned
+          path: dist/OpenWhisper-Windows.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        id: sign
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORGANIZATION_ID }}'
+          project-slug: 'OpenWhisper'
+          signing-policy-slug: 'release-signing'
+          github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'signed'
+
+      - name: Upload signed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWhisper-Windows
+          path: signed/OpenWhisper-Windows.exe
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    name: Build (Linux)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
         run: |
           pyinstaller main.py \
             --onefile \
@@ -121,18 +147,65 @@ jobs:
             --collect-data certifi
 
       - name: Rename artifact
-        run: |
-          mv dist/${{ matrix.artifact }} dist/OpenWhisper-${{ matrix.name }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
-        shell: bash
+        run: mv dist/OpenWhisper dist/OpenWhisper-Linux
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenWhisper-${{ matrix.name }}
-          path: dist/OpenWhisper-${{ matrix.name }}*
+          name: OpenWhisper-Linux
+          path: dist/OpenWhisper-Linux
+
+  build-macos:
+    runs-on: macos-latest
+    name: Build (macOS)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: brew install portaudio
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller main.py \
+            --onefile \
+            --noconsole \
+            --name OpenWhisper \
+            --paths . \
+            --add-data "assets/on.wav:." \
+            --add-data "assets/off.wav:." \
+            --add-data "assets/finish.wav:." \
+            --collect-all ctranslate2 \
+            --collect-all sounddevice \
+            --collect-all _sounddevice_data \
+            --collect-all faster_whisper \
+            --collect-all pystray \
+            --collect-all keyboard \
+            --collect-data certifi
+
+      - name: Rename artifact
+        run: mv dist/OpenWhisper dist/OpenWhisper-macOS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWhisper-macOS
+          path: dist/OpenWhisper-macOS
 
   release:
-    needs: build
+    needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
 
     steps:
